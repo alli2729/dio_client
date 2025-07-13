@@ -1,0 +1,20 @@
+name: dio_client
+description: "A customizable Dio client wrapper with logging and typed response handling."
+version: 1.0.0
+
+environment:
+  sdk: ^3.8.1
+  flutter: ">=1.17.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  either_dart: ^1.0.0
+  dio: ^5.8.0+1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+
+flutter:
