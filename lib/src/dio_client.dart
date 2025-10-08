@@ -11,10 +11,14 @@ class DioClient {
   final Dio _dio;
   final String baseUrl;
   final TokenProvider tokenProvider;
+  final String? globalVersion;
+  final bool useGlobalVersion;
 
   DioClient._internal({
     required this.baseUrl,
     required this.tokenProvider,
+    this.globalVersion,
+    this.useGlobalVersion = true,
     int? connectTimeoutSeconds,
     int? receiveTimeoutSeconds,
     Map<String, dynamic>? headers,
@@ -73,6 +77,8 @@ class DioClient {
   factory DioClient.init({
     required String baseUrl,
     required TokenProvider tokenProvider,
+    String? globalVersion,
+    bool useGlobalVersion = true,
     int? connectTimeoutSeconds,
     int? receiveTimeoutSeconds,
     Map<String, dynamic>? headers,
@@ -80,6 +86,8 @@ class DioClient {
     _instance = DioClient._internal(
       baseUrl: baseUrl,
       tokenProvider: tokenProvider,
+      globalVersion: globalVersion,
+      useGlobalVersion: useGlobalVersion,
       connectTimeoutSeconds: connectTimeoutSeconds,
       receiveTimeoutSeconds: receiveTimeoutSeconds,
       headers: headers,
@@ -100,11 +108,19 @@ class DioClient {
     Map<String, dynamic>? queryParameters,
     Options? options,
     CancelToken? cancelToken,
+    bool? includeVersion,
+    String? overrideVersion,
     ProgressCallback? onReceiveProgress,
   }) async {
     try {
-      final res = await _dio.get(
+      final resolvedPath = _resolvePath(
         path,
+        includeVersion: includeVersion,
+        overrideVersion: overrideVersion,
+      );
+
+      final res = await _dio.get(
+        resolvedPath,
         queryParameters: queryParameters,
         options: options,
         cancelToken: cancelToken,
@@ -123,12 +139,20 @@ class DioClient {
     Map<String, dynamic>? queryParameters,
     Options? options,
     CancelToken? cancelToken,
+    bool? includeVersion,
+    String? overrideVersion,
     ProgressCallback? onSendProgress,
     ProgressCallback? onReceiveProgress,
   }) async {
     try {
-      final res = await _dio.post(
+      final resolvedPath = _resolvePath(
         path,
+        includeVersion: includeVersion,
+        overrideVersion: overrideVersion,
+      );
+
+      final res = await _dio.post(
+        resolvedPath,
         data: data,
         queryParameters: queryParameters,
         options: options,
@@ -149,12 +173,20 @@ class DioClient {
     Map<String, dynamic>? queryParameters,
     Options? options,
     CancelToken? cancelToken,
+    bool? includeVersion,
+    String? overrideVersion,
     ProgressCallback? onSendProgress,
     ProgressCallback? onReceiveProgress,
   }) async {
     try {
-      final res = await _dio.put(
+      final resolvedPath = _resolvePath(
         path,
+        includeVersion: includeVersion,
+        overrideVersion: overrideVersion,
+      );
+
+      final res = await _dio.put(
+        resolvedPath,
         data: data,
         queryParameters: queryParameters,
         options: options,
@@ -175,12 +207,20 @@ class DioClient {
     Map<String, dynamic>? queryParameters,
     Options? options,
     CancelToken? cancelToken,
+    bool? includeVersion,
+    String? overrideVersion,
     ProgressCallback? onSendProgress,
     ProgressCallback? onReceiveProgress,
   }) async {
     try {
-      final res = await _dio.patch(
+      final resolvedPath = _resolvePath(
         path,
+        includeVersion: includeVersion,
+        overrideVersion: overrideVersion,
+      );
+
+      final res = await _dio.patch(
+        resolvedPath,
         data: data,
         queryParameters: queryParameters,
         options: options,
@@ -198,13 +238,21 @@ class DioClient {
     required String path,
     required T Function(dynamic data) fromJson,
     dynamic data,
+    bool? includeVersion,
+    String? overrideVersion,
     Map<String, dynamic>? queryParameters,
     Options? options,
     CancelToken? cancelToken,
   }) async {
     try {
-      final res = await _dio.delete(
+      final resolvedPath = _resolvePath(
         path,
+        includeVersion: includeVersion,
+        overrideVersion: overrideVersion,
+      );
+
+      final res = await _dio.delete(
+        resolvedPath,
         data: data,
         queryParameters: queryParameters,
         options: options,
@@ -241,5 +289,17 @@ class DioClient {
     final statusCode = e.response?.statusCode ?? 500;
     final message = e.response?.data['message'] ?? e.message ?? 'Unknown error';
     return ApiResponse<T>(statusCode: statusCode, error: message);
+  }
+
+  String _resolvePath(String path, {bool? includeVersion, String? overrideVersion}) {
+    if (overrideVersion != null) {
+      return "/$overrideVersion$path";
+    }
+
+    if ((includeVersion ?? useGlobalVersion) && globalVersion != null) {
+      return "/$globalVersion$path";
+    }
+
+    return path;
   }
 }
