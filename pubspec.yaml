@@ -1,6 +1,6 @@
 name: dio_client
 description: "A customizable Dio client wrapper with logging and typed response handling."
-version: 1.1.0
+version: 1.1.1
 
 environment:
   sdk: ^3.8.1
