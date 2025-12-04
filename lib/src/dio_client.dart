@@ -1,24 +1,38 @@
+import 'dart:async';
+
 import 'package:dio/dio.dart';
-import 'package:flutter/foundation.dart';
 
 import 'api_response_model.dart';
-
-typedef TokenProvider = String Function();
+import 'interceptors/logger_interceptor.dart';
+import 'interceptors/refresh_token_interceptor.dart';
+import 'token_storage.dart';
 
 class DioClient {
   static DioClient? _instance;
 
   final Dio _dio;
   final String baseUrl;
-  final TokenProvider tokenProvider;
+  final TokenStorage tokenStorage;
   final String? globalVersion;
   final bool useGlobalVersion;
 
+  // refresh config
+  final String refreshEndpoint;
+  final String refreshHttpMethod;
+  final Map<String, dynamic>? refreshExtraData;
+
+  // interceptor retry limits
+  final int maxRetry;
+
   DioClient._internal({
     required this.baseUrl,
-    required this.tokenProvider,
+    required this.tokenStorage,
     this.globalVersion,
     this.useGlobalVersion = true,
+    required this.refreshEndpoint,
+    this.refreshHttpMethod = 'POST',
+    this.refreshExtraData,
+    this.maxRetry = 1,
     int? connectTimeoutSeconds,
     int? receiveTimeoutSeconds,
     Map<String, dynamic>? headers,
@@ -31,66 +45,44 @@ class DioClient {
          ),
        ) {
     _dio.interceptors.clear();
+    _dio.interceptors.add(LoggerInterceptor());
     _dio.interceptors.add(
-      InterceptorsWrapper(
-        onRequest: (options, handler) {
-          final token = tokenProvider();
-          if (token.isNotEmpty) {
-            options.headers['Authorization'] = 'Bearer $token';
-          }
-
-          debugPrint('➡️ [REQUEST]');
-          debugPrint('🔸 METHOD: ${options.method}');
-          debugPrint('🔸 URL: ${options.uri}');
-          if (options.queryParameters.isNotEmpty) {
-            debugPrint('🔸 QUERY: ${options.queryParameters}');
-          }
-          if (options.data != null) {
-            debugPrint('🔸 DATA: ${options.data}');
-          }
-          debugPrint('🔸 HEADERS: ${options.headers}');
-
-          handler.next(options);
-        },
-        onResponse: (res, handler) {
-          debugPrint('✅ [RESPONSE]');
-          debugPrint('🔸 STATUS: ${res.statusCode}');
-          debugPrint('🔸 URL: ${res.realUri}');
-          debugPrint('🔸 DATA: ${res.data}');
-          handler.next(res);
-        },
-        onError: (e, handler) {
-          debugPrint('❌ [ERROR]');
-          debugPrint('🔸 TYPE: ${e.type}');
-          debugPrint('🔸 MESSAGE: ${e.message}');
-          debugPrint('🔸 URL: ${e.requestOptions.uri}');
-          if (e.response != null) {
-            debugPrint('🔸 STATUS: ${e.response?.statusCode}');
-            debugPrint('🔸 DATA: ${e.response?.data}');
-          }
-          handler.next(e);
-        },
+      RefreshTokenInterceptor(
+        dio: _dio,
+        tokenStorage: tokenStorage,
+        refreshEndpoint: refreshEndpoint,
+        refreshHttpMethod: refreshHttpMethod,
+        refreshExtraData: refreshExtraData,
+        maxRetry: maxRetry,
       ),
     );
   }
 
-  factory DioClient.init({
+  static DioClient init({
     required String baseUrl,
-    required TokenProvider tokenProvider,
+    required TokenStorage tokenStorage,
     String? globalVersion,
     bool useGlobalVersion = true,
+    required String refreshEndpoint,
+    String refreshHttpMethod = 'POST',
+    Map<String, dynamic>? refreshExtraData,
     int? connectTimeoutSeconds,
     int? receiveTimeoutSeconds,
     Map<String, dynamic>? headers,
+    int maxRetry = 1,
   }) {
     _instance = DioClient._internal(
       baseUrl: baseUrl,
-      tokenProvider: tokenProvider,
+      tokenStorage: tokenStorage,
       globalVersion: globalVersion,
       useGlobalVersion: useGlobalVersion,
+      refreshEndpoint: refreshEndpoint,
+      refreshHttpMethod: refreshHttpMethod,
+      refreshExtraData: refreshExtraData,
       connectTimeoutSeconds: connectTimeoutSeconds,
       receiveTimeoutSeconds: receiveTimeoutSeconds,
       headers: headers,
+      maxRetry: maxRetry,
     );
     return _instance!;
   }
