@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:dio/dio.dart';
 
 import 'api_response_model.dart';
+import 'interceptors/access_token_interceptor.dart';
 import 'interceptors/logger_interceptor.dart';
 import 'interceptors/refresh_token_interceptor.dart';
 import 'token_storage.dart';
@@ -45,7 +46,7 @@ class DioClient {
          ),
        ) {
     _dio.interceptors.clear();
-    _dio.interceptors.add(LoggerInterceptor());
+    _dio.interceptors.add(AccessTokenInterceptor(tokenStorage: tokenStorage));
     _dio.interceptors.add(
       RefreshTokenInterceptor(
         dio: _dio,
@@ -56,6 +57,7 @@ class DioClient {
         maxRetry: maxRetry,
       ),
     );
+    _dio.interceptors.add(LoggerInterceptor());
   }
 
   static DioClient init({
