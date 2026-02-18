@@ -279,8 +279,8 @@ class DioClient {
 
   ApiResponse<T> _handleError<T>(DioException e) {
     final statusCode = e.response?.statusCode ?? 500;
-    final message = e.response?.data['message'] ?? e.message ?? 'Unknown error';
-    return ApiResponse<T>(statusCode: statusCode, error: message.toString());
+    final message = e.response?.data.toString() ?? e.message ?? 'Unknown error';
+    return ApiResponse<T>(statusCode: statusCode, error: message);
   }
 
   String _resolvePath(String path, {bool? includeVersion, String? overrideVersion}) {
