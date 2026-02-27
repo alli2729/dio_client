@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 
@@ -11,14 +13,20 @@ class RefreshTokenInterceptor extends Interceptor {
   final String refreshHttpMethod;
   final Map<String, dynamic>? refreshExtraData;
   final int maxRetry;
+  final VoidCallback onLogout;
 
-  bool _isRefreshing = false;
-  final List<_QueuedRequest> _queue = [];
+  Completer<bool>? _refreshCompleter;
+
+  static const String _kAccessToken = 'accessToken';
+  static const String _kRefreshToken = 'refreshToken';
+  static const String _kTokenExpired = 'token_expired';
+  static const String _kErrorReason = 'reason';
 
   RefreshTokenInterceptor({
     required this.dio,
     required this.tokenStorage,
     required this.refreshEndpoint,
+    required this.onLogout,
     this.refreshHttpMethod = 'POST',
     this.refreshExtraData,
     this.maxRetry = 1,
@@ -31,6 +39,9 @@ class RefreshTokenInterceptor extends Interceptor {
   @override
   void onError(DioException err, ErrorInterceptorHandler handler) async {
     final status = err.response?.statusCode;
+    final data = err.response?.data;
+    final errReason = data is Map ? data[_kErrorReason] : null;
+    final isTokenExpired = errReason == _kTokenExpired;
 
     final req = err.requestOptions;
     final retryCount = (req.extra['retry'] as int?) ?? 0;
@@ -46,33 +57,35 @@ class RefreshTokenInterceptor extends Interceptor {
       return;
     }
 
-    if (status != 401) {
+    if (status != 401 || !isTokenExpired) {
       handler.next(err);
       return;
     }
 
-    if (_isRefreshing) {
-      _queue.add(_QueuedRequest(requestOptions: req, handler: handler));
-      return;
+    if (_refreshCompleter != null) {
+      final success = await _refreshCompleter!.future;
+      if (success) {
+        try {
+          final r = await _retryRequest(req);
+          return handler.resolve(r);
+        } catch (e) {
+          return handler.next(e is DioException ? e : err);
+        }
+      } else {
+        return handler.next(err);
+      }
     }
 
-    _isRefreshing = true;
+    _refreshCompleter = Completer<bool>();
     final success = await _performRefresh();
-    _isRefreshing = false;
+    _refreshCompleter?.complete(success);
+    _refreshCompleter = null;
 
     if (!success) {
       await tokenStorage.clearTokensOnLogout();
-      for (final qr in _queue) {
-        qr.handler.next(err);
-      }
-      _queue.clear();
-      handler.next(err);
-      return;
+      onLogout();
+      return handler.next(err);
     }
-
-    // success → retry queued
-    _queue.clear();
-    await Future.wait(_queue.map(_retryQueued));
 
     try {
       final r = await _retryRequest(req);
@@ -100,8 +113,8 @@ class RefreshTokenInterceptor extends Interceptor {
 
       final data = {
         ...?refreshExtraData,
-        'accessToken': access,
-        'refreshToken': refresh,
+        _kAccessToken: access,
+        _kRefreshToken: refresh,
       };
 
       final reqOptions = Options(extra: {'isRefresh': true});
@@ -127,8 +140,8 @@ class RefreshTokenInterceptor extends Interceptor {
           break;
       }
 
-      final newAT = res.data['accessToken'] as String?;
-      final newRT = res.data['refreshToken'] as String?;
+      final newAT = res.data[_kAccessToken] as String?;
+      final newRT = res.data[_kRefreshToken] as String?;
 
       if (newAT == null || newRT == null) return false;
 
@@ -136,6 +149,7 @@ class RefreshTokenInterceptor extends Interceptor {
       return true;
     } catch (e) {
       debugPrint("Refresh failed: $e");
+      _refreshCompleter?.complete(false);
       return false;
     }
   }
@@ -163,22 +177,4 @@ class RefreshTokenInterceptor extends Interceptor {
 
     return dio.fetch(cloned);
   }
-
-  Future<void> _retryQueued(_QueuedRequest qr) async {
-    try {
-      final r = await _retryRequest(qr.requestOptions);
-      qr.handler.resolve(r);
-    } catch (e) {
-      qr.handler.next(
-        e is DioException ? e : DioException(requestOptions: qr.requestOptions),
-      );
-    }
-  }
-}
-
-class _QueuedRequest {
-  final RequestOptions requestOptions;
-  final ErrorInterceptorHandler handler;
-
-  _QueuedRequest({required this.requestOptions, required this.handler});
 }

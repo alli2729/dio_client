@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:dio/dio.dart';
+import 'package:flutter/material.dart';
 
 import 'api_response_model.dart';
 import 'interceptors/access_token_interceptor.dart';
@@ -16,6 +17,7 @@ class DioClient {
   final TokenStorage tokenStorage;
   final String? globalVersion;
   final bool useGlobalVersion;
+  final VoidCallback onLogout;
 
   // refresh config
   final String refreshEndpoint;
@@ -28,6 +30,7 @@ class DioClient {
   DioClient._internal({
     required this.baseUrl,
     required this.tokenStorage,
+    required this.onLogout,
     this.globalVersion,
     this.useGlobalVersion = true,
     required this.refreshEndpoint,
@@ -55,6 +58,7 @@ class DioClient {
         refreshHttpMethod: refreshHttpMethod,
         refreshExtraData: refreshExtraData,
         maxRetry: maxRetry,
+        onLogout: onLogout,
       ),
     );
     _dio.interceptors.add(LoggerInterceptor());
@@ -63,6 +67,7 @@ class DioClient {
   static DioClient init({
     required String baseUrl,
     required TokenStorage tokenStorage,
+    required VoidCallback onLogout,
     String? globalVersion,
     bool useGlobalVersion = true,
     required String refreshEndpoint,
@@ -75,6 +80,7 @@ class DioClient {
   }) {
     _instance = DioClient._internal(
       baseUrl: baseUrl,
+      onLogout: onLogout,
       tokenStorage: tokenStorage,
       globalVersion: globalVersion,
       useGlobalVersion: useGlobalVersion,
