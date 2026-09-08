@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'package:flutter/material.dart';
 
 import '../token_storage.dart';
 
@@ -8,7 +9,15 @@ class AccessTokenInterceptor extends Interceptor {
   AccessTokenInterceptor({required this.tokenStorage});
 
   @override
-  void onRequest(RequestOptions options, RequestInterceptorHandler handler) async {
+  void onRequest(
+    RequestOptions options,
+    RequestInterceptorHandler handler,
+  ) async {
+    if (options.extra['skipAuth'] == true) {
+      handler.next(options);
+      return;
+    }
+
     try {
       final accessToken = await tokenStorage.getAccessToken();
 
@@ -19,7 +28,11 @@ class AccessTokenInterceptor extends Interceptor {
       handler.next(options);
     } catch (e) {
       handler.reject(
-        DioException(requestOptions: options, error: e, type: DioExceptionType.unknown),
+        DioException(
+          requestOptions: options,
+          error: e,
+          type: DioExceptionType.unknown,
+        ),
       );
     }
   }

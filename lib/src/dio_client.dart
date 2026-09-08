@@ -111,6 +111,7 @@ class DioClient {
     bool? includeVersion,
     String? overrideVersion,
     ProgressCallback? onReceiveProgress,
+    bool skipAuth = false,
   }) async {
     try {
       final resolvedPath = _resolvePath(
@@ -122,10 +123,11 @@ class DioClient {
       final res = await _dio.get(
         resolvedPath,
         queryParameters: queryParameters,
-        options: options,
+        options: _resolveOptions(options, skipAuth: skipAuth),
         cancelToken: cancelToken,
         onReceiveProgress: onReceiveProgress,
       );
+
       return _handleResponse(res, fromJson);
     } on DioException catch (e) {
       return _handleError<T>(e);
@@ -143,6 +145,7 @@ class DioClient {
     String? overrideVersion,
     ProgressCallback? onSendProgress,
     ProgressCallback? onReceiveProgress,
+    bool skipAuth = false,
   }) async {
     try {
       final resolvedPath = _resolvePath(
@@ -155,7 +158,7 @@ class DioClient {
         resolvedPath,
         data: data,
         queryParameters: queryParameters,
-        options: options,
+        options: _resolveOptions(options, skipAuth: skipAuth),
         cancelToken: cancelToken,
         onSendProgress: onSendProgress,
         onReceiveProgress: onReceiveProgress,
@@ -177,6 +180,7 @@ class DioClient {
     String? overrideVersion,
     ProgressCallback? onSendProgress,
     ProgressCallback? onReceiveProgress,
+    bool skipAuth = false,
   }) async {
     try {
       final resolvedPath = _resolvePath(
@@ -189,7 +193,7 @@ class DioClient {
         resolvedPath,
         data: data,
         queryParameters: queryParameters,
-        options: options,
+        options: _resolveOptions(options, skipAuth: skipAuth),
         cancelToken: cancelToken,
         onSendProgress: onSendProgress,
         onReceiveProgress: onReceiveProgress,
@@ -211,6 +215,7 @@ class DioClient {
     String? overrideVersion,
     ProgressCallback? onSendProgress,
     ProgressCallback? onReceiveProgress,
+    bool skipAuth = false,
   }) async {
     try {
       final resolvedPath = _resolvePath(
@@ -223,7 +228,7 @@ class DioClient {
         resolvedPath,
         data: data,
         queryParameters: queryParameters,
-        options: options,
+        options: _resolveOptions(options, skipAuth: skipAuth),
         cancelToken: cancelToken,
         onSendProgress: onSendProgress,
         onReceiveProgress: onReceiveProgress,
@@ -243,6 +248,7 @@ class DioClient {
     Map<String, dynamic>? queryParameters,
     Options? options,
     CancelToken? cancelToken,
+    bool skipAuth = false,
   }) async {
     try {
       final resolvedPath = _resolvePath(
@@ -255,7 +261,7 @@ class DioClient {
         resolvedPath,
         data: data,
         queryParameters: queryParameters,
-        options: options,
+        options: _resolveOptions(options, skipAuth: skipAuth),
         cancelToken: cancelToken,
       );
       return _handleResponse(res, fromJson);
@@ -301,5 +307,21 @@ class DioClient {
     }
 
     return path;
+  }
+
+  Options _resolveOptions(
+    Options? options, {
+    required bool skipAuth,
+  }) {
+    final resolvedOptions = options ?? Options();
+
+    if (skipAuth) {
+      resolvedOptions.extra = {
+        ...?resolvedOptions.extra,
+        'skipAuth': true,
+      };
+    }
+
+    return resolvedOptions;
   }
 }
