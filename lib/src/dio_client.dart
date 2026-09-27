@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:dio/dio.dart';
 
 import 'api_response_model.dart';
+import 'default_error.dart';
 import 'interceptors/access_token_interceptor.dart';
 import 'interceptors/logger_interceptor.dart';
 import 'interceptors/refresh_token_interceptor.dart';
@@ -26,6 +27,10 @@ class DioClient {
   // interceptor retry limits
   final int maxRetry;
 
+  /// Default error message used by [ApiResponse.error] when no error is
+  /// provided; configurable app-wide via `DioClient.init(defaultError: ...)`.
+  final String defaultError;
+
   DioClient._internal({
     required this.baseUrl,
     required this.tokenStorage,
@@ -36,10 +41,12 @@ class DioClient {
     this.refreshHttpMethod = 'POST',
     this.refreshExtraData,
     this.maxRetry = 1,
+    String? defaultError,
     int? connectTimeoutSeconds,
     int? receiveTimeoutSeconds,
     Map<String, dynamic>? headers,
-  }) : _dio = Dio(
+  }) : defaultError = resolveDefaultError(defaultError),
+       _dio = Dio(
          BaseOptions(
            baseUrl: baseUrl,
            connectTimeout: Duration(seconds: connectTimeoutSeconds ?? 10),
@@ -47,6 +54,10 @@ class DioClient {
            headers: {'Content-Type': 'application/json', ...?headers},
          ),
        ) {
+    // Apply app-wide before anything can build an ApiResponse, so both
+    // client-generated and manually constructed responses use it.
+    configureDefaultError(this.defaultError);
+
     _dio.interceptors.clear();
     _dio.interceptors.add(AccessTokenInterceptor(tokenStorage: tokenStorage));
     _dio.interceptors.add(
@@ -76,6 +87,7 @@ class DioClient {
     int? receiveTimeoutSeconds,
     Map<String, dynamic>? headers,
     int maxRetry = 1,
+    String? defaultError,
   }) {
     _instance = DioClient._internal(
       baseUrl: baseUrl,
@@ -90,6 +102,7 @@ class DioClient {
       receiveTimeoutSeconds: receiveTimeoutSeconds,
       headers: headers,
       maxRetry: maxRetry,
+      defaultError: defaultError,
     );
     return _instance!;
   }

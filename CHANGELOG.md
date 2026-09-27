@@ -1,3 +1,11 @@
+## 1.2.1
+
+- Added `defaultError` option to `DioClient.init`: lets the consuming app set
+  the app-wide default error message used by `ApiResponse.error` when no
+  error is provided (e.g. `DioClient.init(defaultError: 'خطای نامشخص')`).
+  Falls back to `'Unknown error'` when not configured. `ApiResponse.error`
+  remains non-nullable.
+
 ## 1.2.0
 
 - Standardized backend error parsing: error responses are now read from the

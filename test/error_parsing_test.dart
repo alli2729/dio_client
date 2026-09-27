@@ -99,6 +99,25 @@ void main() {
     expect(empty.error, ApiResponse.defaultError);
   });
 
+  test('malformed payloads use the app-configured defaultError', () async {
+    client = DioClient.init(
+      baseUrl: server.baseUrl,
+      tokenStorage: tokens.toTokenStorage(),
+      onLogout: () {},
+      useGlobalVersion: false,
+      refreshEndpoint: '/refresh',
+      defaultError: 'خطای نامشخص',
+    );
+
+    final res = await client.get<String>(
+      path: '/malformed-error',
+      fromJson: (data) => data as String,
+    );
+
+    expect(res.statusCode, 400);
+    expect(res.error, 'خطای نامشخص');
+  });
+
   test('successful responses still parse data with fromJson', () async {
     final res = await client.get<Map<String, dynamic>>(
       path: '/thing',

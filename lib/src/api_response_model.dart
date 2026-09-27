@@ -1,9 +1,14 @@
 import 'package:either_dart/either.dart';
 
+import 'default_error.dart';
+
 class ApiResponse<T> {
   /// Value used for [error] when no error message is provided (e.g. success
   /// responses or backend errors with a missing/malformed error payload).
-  static const String defaultError = 'Unknown error';
+  ///
+  /// Defaults to `'Unknown error'`; the consuming app can override it once
+  /// via `DioClient.init(defaultError: ...)`.
+  static String get defaultError => configuredDefaultError();
 
   final int statusCode;
   final T? data;
@@ -16,8 +21,8 @@ class ApiResponse<T> {
   ApiResponse({
     required this.statusCode,
     this.data,
-    this.error = defaultError,
-  });
+    String? error,
+  }) : error = error ?? configuredDefaultError();
 
   /// Supports transforming T to any other type U for the right side
   Either<String, U> fold<U>(
