@@ -57,16 +57,16 @@ class RefreshTokenInterceptor extends Interceptor {
     final retryExtra = req.extra['retry'];
     final retryCount = retryExtra is int ? retryExtra : 0;
 
-    // Refresh ONLY a normal authenticated request whose 401 body is exactly
-    // SimpleJWT's expired-AccessToken payload. Unrelated 401s, skipAuth
-    // requests, the refresh request itself and already-retried requests pass
-    // through untouched.
+    // Refresh ONLY a normal authenticated request whose error body is exactly
+    // the backend's invalid-token payload: {"error": "invalid token"}.
+    // Unrelated 401s, skipAuth requests, the refresh request itself and
+    // already-retried requests pass through untouched.
     final shouldRefresh =
         status == 401 &&
         retryCount < maxRetry &&
         req.extra['skipAuth'] != true &&
         !_isRefreshRequest(req) &&
-        _isExpiredAccessToken(err.response?.data);
+        _isInvalidToken(err.response?.data);
 
     if (!shouldRefresh) {
       handler.next(err);
@@ -123,30 +123,16 @@ class RefreshTokenInterceptor extends Interceptor {
     handler.next(err);
   }
 
-  /// Strict SimpleJWT expired-access-token match: code == token_not_valid AND
-  /// messages contains exactly {token_class: AccessToken, token_type: access,
-  /// message: "Token is expired"}. Invalid / blacklisted tokens and any other
-  /// 401 never trigger a refresh.
-  bool _isExpiredAccessToken(dynamic data) {
+  /// Strict match of the backend's invalid-token payload: a map whose
+  /// `error` field is exactly "invalid token" (case-insensitive, trimmed).
+  /// Malformed bodies, missing `error` fields and any other message never
+  /// trigger a refresh.
+  bool _isInvalidToken(dynamic data) {
     if (data is! Map) return false;
 
-    if (data['code'] != 'token_not_valid') {
-      return false;
-    }
+    final error = data['error'];
 
-    final messages = data['messages'];
-
-    if (messages is! List) {
-      return false;
-    }
-
-    return messages.any(
-      (message) =>
-          message is Map &&
-          message['token_class'] == 'AccessToken' &&
-          message['token_type'] == 'access' &&
-          message['message'] == 'Token is expired',
-    );
+    return error is String && error.trim().toLowerCase() == 'invalid token';
   }
 
   Future<_RefreshOutcome> _performRefresh() async {
@@ -201,19 +187,20 @@ class RefreshTokenInterceptor extends Interceptor {
       final newAccess = data is Map ? data['access'] as String? : null;
       final newRefresh = data is Map ? data['refresh'] as String? : null;
 
-      if (newAccess == null ||
-          newAccess.isEmpty ||
-          newRefresh == null ||
-          newRefresh.isEmpty) {
+      if (newAccess is! String || newAccess.isEmpty) {
         // 200 but unusable body: no evidence the refresh token was rejected,
         // so keep the session and surface the error instead.
-        debugPrint('Refresh response is missing access/refresh fields');
+        debugPrint('Refresh response is missing the access field');
         return _RefreshOutcome.transient;
       }
 
+      // Rotate the refresh token only when the backend returns a new one;
+      // otherwise keep the refresh token that was just used.
       await tokenStorage.saveTokens(
         accessToken: newAccess,
-        refreshToken: newRefresh,
+        refreshToken: (newRefresh is String && newRefresh.isNotEmpty)
+            ? newRefresh
+            : refresh,
       );
       return _RefreshOutcome.success;
     } on DioException catch (e) {

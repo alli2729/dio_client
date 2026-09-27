@@ -96,7 +96,9 @@ class DioClient {
 
   factory DioClient() {
     if (_instance == null) {
-      throw Exception('DioClient not initialized. Call DioClient.init(...) first.');
+      throw Exception(
+        'DioClient not initialized. Call DioClient.init(...) first.',
+      );
     }
     return _instance!;
   }
@@ -273,18 +275,29 @@ class DioClient {
     Response response,
     T Function(dynamic data) fromJson,
   ) {
+    final statusCode = response.statusCode ?? 200;
+
+    // Non-2xx can reach here only with a custom validateStatus; treat them as
+    // errors instead of attempting fromJson on an error payload.
+    if (!_isSuccessStatus(statusCode)) {
+      return ApiResponse<T>(
+        statusCode: statusCode,
+        error: _extractErrorMessage(response.data) ?? ApiResponse.defaultError,
+      );
+    }
+
     try {
       final raw = response.data;
 
       if (raw is String && T == String) {
-        return ApiResponse(statusCode: response.statusCode ?? 200, data: raw as T);
+        return ApiResponse(statusCode: statusCode, data: raw as T);
       }
 
       final parsed = fromJson(raw);
-      return ApiResponse(statusCode: response.statusCode ?? 200, data: parsed);
+      return ApiResponse(statusCode: statusCode, data: parsed);
     } catch (e) {
       return ApiResponse(
-        statusCode: response.statusCode ?? 500,
+        statusCode: statusCode,
         error: 'Failed to parse response: $e',
       );
     }
@@ -292,11 +305,49 @@ class DioClient {
 
   ApiResponse<T> _handleError<T>(DioException e) {
     final statusCode = e.response?.statusCode ?? 500;
-    final message = e.response?.data.toString() ?? e.message ?? 'Unknown error';
+    // Server responded: trust only its error body, else the safe default
+    // (Dio's badResponse boilerplate is not a backend error message).
+    // No response (timeout / connection error): surface Dio's message.
+    final message =
+        _extractErrorMessage(e.response?.data) ??
+        (e.response == null ? e.message : null) ??
+        ApiResponse.defaultError;
     return ApiResponse<T>(statusCode: statusCode, error: message);
   }
 
-  String _resolvePath(String path, {bool? includeVersion, String? overrideVersion}) {
+  bool _isSuccessStatus(int statusCode) =>
+      statusCode >= 200 && statusCode < 300;
+
+  /// Extracts the backend error message from a response body.
+  ///
+  /// The backend returns errors as `{"error": "message"}`. Falls back to the
+  /// raw body when it is a non-empty plain-text string. Returns null for
+  /// missing/malformed payloads so callers can apply [ApiResponse.defaultError].
+  String? _extractErrorMessage(dynamic data) {
+    if (data is Map) {
+      final error = data['error'];
+      if (error is String) {
+        final trimmed = error.trim();
+        if (trimmed.isNotEmpty) return trimmed;
+      }
+      return null;
+    }
+    if (data is String) {
+      final trimmed = data.trim();
+      if (trimmed.isEmpty) return null;
+      // A string that looks like JSON means a malformed/undecodable error
+      // payload; expose the safe default instead of raw JSON text.
+      if (trimmed.startsWith('{') || trimmed.startsWith('[')) return null;
+      return trimmed;
+    }
+    return null;
+  }
+
+  String _resolvePath(
+    String path, {
+    bool? includeVersion,
+    String? overrideVersion,
+  }) {
     if (overrideVersion != null) {
       return "/$overrideVersion$path";
     }
